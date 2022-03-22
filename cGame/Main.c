@@ -20,7 +20,13 @@ RECT gGameWindowSize;
 
 MONITORINFO gMonitorInfo = { sizeof(MONITORINFO) };
 
+int32_t gMonitorWidth;
 
+int32_t gMonitorHeight;
+
+
+// Main window function
+// Game loop in here
 int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR CommandLine, INT CmdShow)
 {
     UNREFERENCED_PARAMETER(Instance);
@@ -164,6 +170,9 @@ DWORD CreateMainGameWindow(void)
 
     WindowClass.lpszClassName = GAME_NAME "_WINDOWCLASS";
 
+    // This function doesn't work for Windows 7 and older
+    //SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    
 
     // Returns if Class Registration fails
     if (RegisterClassExA(&WindowClass) == 0)
@@ -201,16 +210,32 @@ DWORD CreateMainGameWindow(void)
         goto Exit;
     }
 
-    if (GetMonitorInfo(MonitorFromWindow(gGameWindow, MONITOR_DEFAULTTOPRIMARY), &gMonitorInfo) == 0)
+    if (GetMonitorInfoA(MonitorFromWindow(gGameWindow, MONITOR_DEFAULTTOPRIMARY), &gMonitorInfo) == 0)
     {
         Result = ERROR_MONITOR_NO_DESCRIPTOR;
 
         goto Exit;
     }
 
-    int MonitorWidth = gMonitorInfo.rcMonitor.right - gMonitorInfo.rcMonitor.left;
+    gMonitorWidth = gMonitorInfo.rcMonitor.right - gMonitorInfo.rcMonitor.left;
 
-    int MonitorHeight = gMonitorInfo.rcMonitor.bottom - gMonitorInfo.rcMonitor.top;
+    gMonitorHeight = gMonitorInfo.rcMonitor.bottom - gMonitorInfo.rcMonitor.top;
+
+    if (SetWindowLongPtrA(gGameWindow, GWL_STYLE, (WS_OVERLAPPEDWINDOW | WS_VISIBLE) & ~WS_OVERLAPPEDWINDOW) == 0)
+    {
+        Result = GetLastError();
+
+        goto Exit;
+    }
+
+    if (SetWindowPos(gGameWindow, HWND_TOP, gMonitorInfo.rcMonitor.left, gMonitorInfo.rcMonitor.top, gMonitorWidth, gMonitorHeight, SWP_NOOWNERZORDER | SWP_FRAMECHANGED) == 0)
+    {
+        Result = GetLastError();
+
+        goto Exit;
+    }
+
+
 
 
 Exit:
@@ -242,14 +267,46 @@ void ProcessPlayerInput(void)
     {
         SendMessageA(gGameWindow, WM_CLOSE, 0, 0);
     }
-
 }
 
 void RenderFrameGraphics(void)
 {
+    PIXEL32 Pixel = { 0 };
+
+    Pixel.Blue = 0xFF;
+
+    Pixel.Green = 0;
+   
+    Pixel.Red = 0;
+
+    Pixel.Alpha = 0xFF;
+
+    memcpy(gBackBuffer.Memory, &Pixel, 4);
+
+
+    for (int x = 0; x < GAME_WIDTH * 2; x++)
+    {
+        memcpy((PIXEL32*) gBackBuffer.Memory + x, &Pixel, sizeof(PIXEL32));
+    }
+
+
     HDC DeviceContext = GetDC(gGameWindow);
 
-    StretchDIBits(DeviceContext, 0, 0, 100, 100, 0, 0, 100, 100, gBackBuffer.Memory, &gBackBuffer.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DeviceContext, 
+        0, 
+        0, 
+        gMonitorWidth, 
+        gMonitorHeight, 
+        0, 
+        0, 
+        GAME_WIDTH, 
+        GAME_HEIGHT, 
+        gBackBuffer.Memory,
+        &gBackBuffer.BitmapInfo, 
+        DIB_RGB_COLORS, 
+        SRCCOPY);
+
+
 
 
 
