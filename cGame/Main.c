@@ -112,7 +112,7 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
         while (ElapsedMicroSecondsPerFrame <= TARGET_MICROSECONDS_PER_FRAME)
         {
-            Sleep(0);
+            Sleep(1);   // anywhere from 1 millisecond to a full system timer tick (?)
 
             ElapsedMicroSecondsPerFrame = FrameEnd - FrameStart;
 
@@ -127,23 +127,9 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
         if ((gPerformanceData.TotalFramesRendered % AVG_FPS_X_FRAME) == 0)
         {
-            int64_t AverageMicroSecondsPerFrameRaw = ElapsedMicroSecondsPerFrameAccumulatorRaw / AVG_FPS_X_FRAME;
+            gPerformanceData.RawFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorRaw / AVG_FPS_X_FRAME) * .000001f);
 
-            int64_t AverageMicroSecondsPerFrameCooked = ElapsedMicroSecondsPerFrameAccumulatorCooked / AVG_FPS_X_FRAME;
-
-            gPerformanceData.RawFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorRaw / 60) * .000001f);
-
-            gPerformanceData.CookedFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorCooked / 60) * .000001f);
-
-            char str[256] = { 0 };
-
-            _snprintf_s(str, _countof(str), _TRUNCATE, 
-                "Avg milliseconds/frame Raw: %.02f\tAvg FPS Cooked: %.01f\tAvg FPS Raw: %.01f\n", 
-                AverageMicroSecondsPerFrameRaw,
-                gPerformanceData.CookedFPSAverage,
-                gPerformanceData.RawFPSAverage);
-
-            OutputDebugStringA(str);
+            gPerformanceData.CookedFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorCooked / AVG_FPS_X_FRAME) * .000001f);
 
             ElapsedMicroSecondsPerFrameAccumulatorRaw = 0;
 
@@ -319,10 +305,22 @@ void ProcessPlayerInput(void)
 {
     int16_t EscapeKeyIsDown = GetAsyncKeyState(VK_ESCAPE);
 
+    int16_t DebugKeyIsDown = GetAsyncKeyState(VK_F1);
+
+    static int16_t DebugKeyWasDown;
+
     if (EscapeKeyIsDown)
     {
         SendMessageA(gGameWindow, WM_CLOSE, 0, 0);
     }
+    if (DebugKeyIsDown && !DebugKeyWasDown)
+    {
+        gPerformanceData.DisplayDebugInfo = !gPerformanceData.DisplayDebugInfo;
+    }
+    
+    DebugKeyWasDown = DebugKeyIsDown;
+
+
 }
 
 void RenderFrameGraphics(void)
@@ -342,10 +340,21 @@ void RenderFrameGraphics(void)
     for (int x = 0; x < GAME_WIDTH * GAME_HEIGHT; x++)
     {
         memcpy_s((PIXEL32*) gBackBuffer.Memory + x, sizeof(PIXEL32), &Pixel, sizeof(PIXEL32));
-
-
     }
 
+    int32_t ScreenX = 25;
+
+    int32_t ScreenY = 25;
+
+    int32_t StartingScreenPixel = (GAME_WIDTH * GAME_HEIGHT) - GAME_WIDTH - (GAME_WIDTH * ScreenY) + ScreenX;
+
+    for (int32_t y = 0; y < 16; y++)
+    {
+        for (int32_t x = 0; x < 16; x++)
+        {
+            memset((PIXEL32*)gBackBuffer.Memory + (uintptr_t) StartingScreenPixel + x - ((uintptr_t) GAME_WIDTH * y), 0xFF, sizeof(PIXEL32));
+        }
+    }
 
     HDC DeviceContext = GetDC(gGameWindow);
 
@@ -363,6 +372,20 @@ void RenderFrameGraphics(void)
         DIB_RGB_COLORS, 
         SRCCOPY);
 
+    if (gPerformanceData.DisplayDebugInfo == TRUE)
+    {
+        SelectObject(DeviceContext, (HFONT)GetStockObject(ANSI_FIXED_FONT));
+
+        char DebugTextBuffer[64] = { 0 };
+
+        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "FPS Raw:     %.01f", gPerformanceData.RawFPSAverage);
+
+        TextOutA(DeviceContext, 0, 0, DebugTextBuffer, (int)strlen(DebugTextBuffer));
+
+        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "FPS Cooked:  %.01f", gPerformanceData.CookedFPSAverage);
+
+        TextOutA(DeviceContext, 0, 13, DebugTextBuffer, (int)strlen(DebugTextBuffer));
+    }
 
 
 

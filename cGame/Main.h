@@ -55,6 +55,8 @@ typedef struct GAME_PERFORMANCE_DATA
 
 	int32_t MonitorHeight;
 
+	BOOL DisplayDebugInfo;
+
 } GAME_PERFORMANCE_DATA;
 
 
