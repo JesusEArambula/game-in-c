@@ -1,16 +1,18 @@
 #pragma once
 
-#define GAME_NAME			"Game B"
+#define GAME_NAME						"Game B"
 
-#define GAME_WIDTH			384
+#define GAME_WIDTH						384
 
-#define GAME_HEIGHT			240
+#define GAME_HEIGHT						240
 
-#define GAME_BPP			32	// bits per pixel
+#define GAME_BPP						32	// bits per pixel
 
-#define GAME_CANVAS			(GAME_WIDTH * GAME_HEIGHT * (GAME_BPP / 8))
+#define GAME_CANVAS						(GAME_WIDTH * GAME_HEIGHT * (GAME_BPP / 8))
 
-#define AVG_FPS_X_FRAME		100	// after ever X frames, calculate the average FPS
+#define AVG_FPS_X_FRAME					100	// after ever X frames, calculate the average FPS
+
+#define TARGET_MICROSECONDS_PER_FRAME	16667
 
 
 #pragma warning(disable: 4820)	// disable warning regarding structure padding
@@ -41,18 +43,12 @@ typedef struct GAME_PERFORMANCE_DATA
 {
 	uint64_t TotalFramesRendered;
 
-	uint32_t RawFramesPerSecondAverage;
+	float RawFPSAverage;
 
-	uint32_t CookedFramesPerSecondAverage;
+	float CookedFPSAverage;
 
-	LARGE_INTEGER PerformanceFrequency;
+	int64_t PerformanceFrequency;
 
-	LARGE_INTEGER FrameStart;
-
-	LARGE_INTEGER FrameEnd;
-
-	LARGE_INTEGER ElapsedMicrosecondsPerFrame;
-	
 	MONITORINFO MonitorInfo;
 
 	int32_t MonitorWidth;

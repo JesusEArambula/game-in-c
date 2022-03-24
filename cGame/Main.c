@@ -21,7 +21,6 @@ RECT gGameWindowSize;
 GAME_PERFORMANCE_DATA gPerformanceData;
 
 
-
 // Main window function
 // Game loop in here
 INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR CommandLine, INT CmdShow)
@@ -33,6 +32,19 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
     UNREFERENCED_PARAMETER(CommandLine);
 
     UNREFERENCED_PARAMETER(CmdShow);
+
+    MSG Message = { 0 };
+
+    int64_t FrameStart = 0;
+
+    int64_t FrameEnd = 0;
+
+    int64_t ElapsedMicroSecondsPerFrame;
+
+    int64_t ElapsedMicroSecondsPerFrameAccumulatorRaw = 0;
+
+    int64_t ElapsedMicroSecondsPerFrameAccumulatorCooked = 0;
+
 
     if (GameIsAlreadyRunning() == TRUE)
     {
@@ -46,7 +58,7 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
         goto Exit;
     }
 
-    QueryPerformanceFrequency(&gPerformanceData.PerformanceFrequency);
+    QueryPerformanceFrequency(&gPerformanceData.PerformanceFrequency);  // only needs to be called once
 
     gBackBuffer.BitmapInfo.bmiHeader.biSize = sizeof(gBackBuffer.BitmapInfo.bmiHeader);
 
@@ -71,14 +83,11 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
     memset(gBackBuffer.Memory, 0x7F, GAME_CANVAS);
 
-
-    MSG Message = { 0 };
-
     gGameIsRunning = TRUE;
 
     while (gGameIsRunning == TRUE)  // main game loop
     {
-        QueryPerformanceCounter(&gPerformanceData.FrameStart);
+        QueryPerformanceCounter((LARGE_INTEGER*) &FrameStart);  // start the counter
 
         while (PeekMessageA(&Message, gGameWindow, 0, 0, PM_REMOVE))
         {
@@ -89,25 +98,57 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
         RenderFrameGraphics();
 
-        QueryPerformanceCounter(&gPerformanceData.FrameEnd);
+        QueryPerformanceCounter((LARGE_INTEGER*) &FrameEnd);    // marks end counter
 
-        gPerformanceData.ElapsedMicrosecondsPerFrame.QuadPart = gPerformanceData.FrameEnd.QuadPart - gPerformanceData.FrameStart.QuadPart;
+        ElapsedMicroSecondsPerFrame = FrameEnd - FrameStart;
 
-        gPerformanceData.ElapsedMicrosecondsPerFrame.QuadPart *= 1000000;
+        ElapsedMicroSecondsPerFrame *= 1000000;
 
-        gPerformanceData.ElapsedMicrosecondsPerFrame.QuadPart /= gPerformanceData.PerformanceFrequency.QuadPart;
-
-        Sleep(1);
+        ElapsedMicroSecondsPerFrame /= gPerformanceData.PerformanceFrequency;
 
         gPerformanceData.TotalFramesRendered++;
 
+        ElapsedMicroSecondsPerFrameAccumulatorRaw += ElapsedMicroSecondsPerFrame;
+
+        while (ElapsedMicroSecondsPerFrame <= TARGET_MICROSECONDS_PER_FRAME)
+        {
+            Sleep(0);
+
+            ElapsedMicroSecondsPerFrame = FrameEnd - FrameStart;
+
+            ElapsedMicroSecondsPerFrame *= 1000000;
+
+            ElapsedMicroSecondsPerFrame /= gPerformanceData.PerformanceFrequency;
+
+            QueryPerformanceCounter((LARGE_INTEGER*)&FrameEnd);
+        }
+
+        ElapsedMicroSecondsPerFrameAccumulatorCooked += ElapsedMicroSecondsPerFrame;
+
         if ((gPerformanceData.TotalFramesRendered % AVG_FPS_X_FRAME) == 0)
         {
-            char str[64] = { 0 };
+            int64_t AverageMicroSecondsPerFrameRaw = ElapsedMicroSecondsPerFrameAccumulatorRaw / AVG_FPS_X_FRAME;
 
-            _snprintf_s(str, _countof(str), _TRUNCATE, "Elapsed Microseconds: %lli\n", gPerformanceData.ElapsedMicrosecondsPerFrame.QuadPart);
+            int64_t AverageMicroSecondsPerFrameCooked = ElapsedMicroSecondsPerFrameAccumulatorCooked / AVG_FPS_X_FRAME;
+
+            gPerformanceData.RawFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorRaw / 60) * .000001f);
+
+            gPerformanceData.CookedFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorCooked / 60) * .000001f);
+
+            char str[256] = { 0 };
+
+            _snprintf_s(str, _countof(str), _TRUNCATE, 
+                "Avg milliseconds/frame Raw: %.02f\tAvg FPS Cooked: %.01f\tAvg FPS Raw: %.01f\n", 
+                AverageMicroSecondsPerFrameRaw,
+                gPerformanceData.CookedFPSAverage,
+                gPerformanceData.RawFPSAverage);
 
             OutputDebugStringA(str);
+
+            ElapsedMicroSecondsPerFrameAccumulatorRaw = 0;
+
+            ElapsedMicroSecondsPerFrameAccumulatorCooked = 0;
+
         }
     }
 
@@ -125,32 +166,21 @@ LRESULT CALLBACK MainWindowProc(
 {
     LRESULT Result = 0;
 
-    // See the code messages from interacting with window
-    /*
-    char buf[12] = { 0 };
-
-    _itoa_s(Message, buf, _countof(buf), 10);
-
-    OutputDebugStringA(buf);
-
-    OutputDebugStringA("\n");
-    */
-
     switch (Message)
     {
-    case WM_CLOSE:
-    {
-        gGameIsRunning = FALSE;
+        case WM_CLOSE:
+        {
+            gGameIsRunning = FALSE;
 
 
-        PostQuitMessage(0);
+            PostQuitMessage(0);
 
-        break;
-    }
-    default:
-    {
-        Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
-    }
+            break;
+        }
+        default:
+        {
+            Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
+        }
     }
     return(Result);
 }
