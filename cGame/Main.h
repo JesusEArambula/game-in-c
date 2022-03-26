@@ -14,10 +14,13 @@
 
 #define TARGET_MICROSECONDS_PER_FRAME	16667
 
-
 #pragma warning(disable: 4820)	// disable warning regarding structure padding
 
 #pragma warning(disable: 5045)	// disable warning about Spectre vulnerability
+
+typedef LONG(NTAPI* _NtQueryTimerResolution) (OUT PULONG MinimumResolution, OUT PULONG MaximumResolution, OUT PULONG CurrentResolution);
+
+_NtQueryTimerResolution NtQueryTimerResolution;
 
 typedef struct GAMEBITMAP	// Game Bit Map Structure
 {
@@ -57,6 +60,12 @@ typedef struct GAME_PERFORMANCE_DATA
 
 	BOOL DisplayDebugInfo;
 
+	LONG MinimumTimerResolution;
+
+	LONG MaximumTimerResolution;
+
+	LONG CurrentTimerResolution;
+
 } GAME_PERFORMANCE_DATA;
 
 
@@ -74,3 +83,4 @@ void ProcessPlayerInput(void);
 
 void RenderFrameGraphics(void);
 
+void ClearScreen(_In_ __m128i Color);
