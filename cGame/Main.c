@@ -20,6 +20,8 @@ GAMEBITMAP gBackBuffer;
 
 GAME_PERFORMANCE_DATA gPerformanceData;
 
+PLAYER gPlayer;
+
 // Main window function
 // Game loop in here
 INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR CommandLine, INT CmdShow)
@@ -38,7 +40,7 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
     int64_t FrameEnd = 0;
 
-    int64_t ElapsedMicroSecondsPerFrame;
+    int64_t ElapsedMicroSeconds;
 
     int64_t ElapsedMicroSecondsPerFrameAccumulatorRaw = 0;
 
@@ -103,6 +105,10 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
     memset(gBackBuffer.Memory, 0x7F, GAME_CANVAS);
 
+    gPlayer.WorldPosX = 25;
+
+    gPlayer.WorldPosY = 25;
+
     gGameIsRunning = TRUE;
 
     while (gGameIsRunning == TRUE)  // main game loop
@@ -120,30 +126,33 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
         QueryPerformanceCounter((LARGE_INTEGER*) &FrameEnd);    // marks end counter
 
-        ElapsedMicroSecondsPerFrame = FrameEnd - FrameStart;
+        ElapsedMicroSeconds = FrameEnd - FrameStart;
 
-        ElapsedMicroSecondsPerFrame *= 1000000;
+        ElapsedMicroSeconds *= 1000000;
 
-        ElapsedMicroSecondsPerFrame /= gPerformanceData.PerformanceFrequency;
+        ElapsedMicroSeconds /= gPerformanceData.PerformanceFrequency;
 
         gPerformanceData.TotalFramesRendered++;
 
-        ElapsedMicroSecondsPerFrameAccumulatorRaw += ElapsedMicroSecondsPerFrame;
+        ElapsedMicroSecondsPerFrameAccumulatorRaw += ElapsedMicroSeconds;
 
-        while (ElapsedMicroSecondsPerFrame <= TARGET_MICROSECONDS_PER_FRAME)
+        while (ElapsedMicroSeconds <= TARGET_MICROSECONDS_PER_FRAME)
         {
-            Sleep(0);   // anywhere from 1 millisecond to a full system timer tick (?)
+            ElapsedMicroSeconds = FrameEnd - FrameStart;
 
-            ElapsedMicroSecondsPerFrame = FrameEnd - FrameStart;
+            ElapsedMicroSeconds *= 1000000;
 
-            ElapsedMicroSecondsPerFrame *= 1000000;
-
-            ElapsedMicroSecondsPerFrame /= gPerformanceData.PerformanceFrequency;
+            ElapsedMicroSeconds /= gPerformanceData.PerformanceFrequency;
 
             QueryPerformanceCounter((LARGE_INTEGER*)&FrameEnd);
+
+            if (ElapsedMicroSeconds <= ((int64_t)TARGET_MICROSECONDS_PER_FRAME - (gPerformanceData.CurrentTimerResolution * 0.1f)))
+            {
+                Sleep(0);   // anywhere from 1 millisecond to a full system timer tick (?)
+            }
         }
 
-        ElapsedMicroSecondsPerFrameAccumulatorCooked += ElapsedMicroSecondsPerFrame;
+        ElapsedMicroSecondsPerFrameAccumulatorCooked += ElapsedMicroSeconds;
 
         if ((gPerformanceData.TotalFramesRendered % AVG_FPS_X_FRAME) == 0)
         {
@@ -327,7 +336,23 @@ void ProcessPlayerInput(void)
 
     int16_t DebugKeyIsDown = GetAsyncKeyState(VK_F1);
 
+    int16_t LeftKeyIsDown = GetAsyncKeyState(VK_LEFT) | GetAsyncKeyState('A');
+
+    int16_t RightKeyIsDown = GetAsyncKeyState(VK_RIGHT) | GetAsyncKeyState('D');
+
+    int16_t UpKeyIsDown = GetAsyncKeyState(VK_UP) | GetAsyncKeyState('W');
+
+    int16_t DownKeyIsDown = GetAsyncKeyState(VK_DOWN) | GetAsyncKeyState('S');
+
     static int16_t DebugKeyWasDown;
+
+    static int16_t LeftKeyWasDown;
+
+    static int16_t RightKeyWasDown;
+
+    static int16_t UpKeyWasDown;
+
+    static int16_t DownKeyWasDown;
 
     if (EscapeKeyIsDown)
     {
@@ -337,21 +362,64 @@ void ProcessPlayerInput(void)
     {
         gPerformanceData.DisplayDebugInfo = !gPerformanceData.DisplayDebugInfo;
     }
-    
+    // Player Movement
+    if (LeftKeyIsDown)
+    {
+        if (gPlayer.WorldPosX > 0)
+        {
+            gPlayer.WorldPosX--;
+        }
+    }
+    if (RightKeyIsDown)
+    {
+        if (gPlayer.WorldPosX < GAME_WIDTH - 16)
+        {
+            gPlayer.WorldPosX++;
+        }
+    }
+    if (UpKeyIsDown)
+    {
+        if (gPlayer.WorldPosY > 0)
+        {
+            gPlayer.WorldPosY--;
+        }
+    }
+    if (DownKeyIsDown)
+    {
+        if (gPlayer.WorldPosY < GAME_HEIGHT - 16)
+        {
+            gPlayer.WorldPosY++;
+        }
+    }
+
     DebugKeyWasDown = DebugKeyIsDown;
+
+    LeftKeyWasDown = LeftKeyIsDown;
+
+    RightKeyWasDown = RightKeyIsDown;
+
+    UpKeyWasDown = UpKeyIsDown;
+
+    DownKeyWasDown = DownKeyIsDown;
 
 
 }
 
 void RenderFrameGraphics(void)
 {
+#ifdef SIMD
     __m128i QuadPixel = { 0x7f, 0x00, 0x00, 0xff, 0x7f, 0x00, 0x00, 0xff, 0x7f, 0x00, 0x00, 0xff, 0x7f, 0x00, 0x00, 0xff };
 
     ClearScreen(QuadPixel);
+#else
+    PIXEL32 Pixel = { 0x7f, 0x00, 0x00, 0xff };
 
-    int32_t ScreenX = 25;
+    ClearScreen(&Pixel);
+#endif
 
-    int32_t ScreenY = 25;
+    int32_t ScreenX = gPlayer.WorldPosX;
+
+    int32_t ScreenY = gPlayer.WorldPosY;
 
     int32_t StartingScreenPixel = (GAME_WIDTH * GAME_HEIGHT) - GAME_WIDTH - (GAME_WIDTH * ScreenY) + ScreenX;
 
@@ -385,6 +453,8 @@ void RenderFrameGraphics(void)
 
         char DebugTextBuffer[64] = { 0 };
 
+        // Show FPS info
+
         sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "FPS Raw:     %.01f", gPerformanceData.RawFPSAverage);
 
         TextOutA(DeviceContext, 0, 0, DebugTextBuffer, (int)strlen(DebugTextBuffer));
@@ -393,8 +463,7 @@ void RenderFrameGraphics(void)
 
         TextOutA(DeviceContext, 0, 13, DebugTextBuffer, (int)strlen(DebugTextBuffer));
 
-
-
+        // Show Resolution info
 
         sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "Min Timer Resolution:  %.02f", gPerformanceData.MinimumTimerResolution / 10000.0f);
 
@@ -407,16 +476,12 @@ void RenderFrameGraphics(void)
         sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "Cur Timer Resolution:  %.01f", gPerformanceData.CurrentTimerResolution / 10000.0f);
 
         TextOutA(DeviceContext, 0, 51, DebugTextBuffer, (int)strlen(DebugTextBuffer));
-
-
     }
-
-
-
 
     ReleaseDC(gGameWindow, DeviceContext);
 }
 
+#ifdef SIMD
 __forceinline void ClearScreen(_In_ __m128i Color)
 {
     for (int x = 0; x < GAME_WIDTH * GAME_HEIGHT; x += 4)
@@ -424,3 +489,13 @@ __forceinline void ClearScreen(_In_ __m128i Color)
         _mm_store_si128((PIXEL32*)gBackBuffer.Memory + x, Color);
     }
 }
+#else
+
+__forceinline void ClearScreen(_In_ PIXEL32* Pixel)
+{
+    for (int x = 0; x < GAME_WIDTH * GAME_HEIGHT; x++)
+    {
+        memcpy((PIXEL32*) gBackBuffer.Memory + x, Pixel, sizeof(PIXEL32));
+    }
+}
+#endif
