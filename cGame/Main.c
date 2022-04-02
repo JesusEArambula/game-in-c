@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include <psapi.h>
+
 #include <emmintrin.h>
 
 #pragma warning(pop)
@@ -64,7 +66,7 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
     NtQueryTimerResolution(&gPerformanceData.MinimumTimerResolution, &gPerformanceData.MaximumTimerResolution, &gPerformanceData.CurrentTimerResolution);
 
-
+    GetSystemInfo(&gPerformanceData.SystemInfo);
 
     if (GameIsAlreadyRunning() == TRUE)
     {
@@ -78,9 +80,10 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
         goto Exit;
     }
 
-    QueryPerformanceFrequency(&gPerformanceData.PerformanceFrequency);  // only needs to be called once
+    QueryPerformanceFrequency((LARGE_INTEGER*)&gPerformanceData.PerformanceFrequency);  // only needs to be called once
 
     gPerformanceData.DisplayDebugInfo = TRUE;
+
 
     gBackBuffer.BitmapInfo.bmiHeader.biSize = sizeof(gBackBuffer.BitmapInfo.bmiHeader);
 
@@ -146,9 +149,9 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
             QueryPerformanceCounter((LARGE_INTEGER*)&FrameEnd);
 
-            if (ElapsedMicroSeconds <= ((int64_t)TARGET_MICROSECONDS_PER_FRAME - (gPerformanceData.CurrentTimerResolution * 0.1f)))
+            if (ElapsedMicroSeconds < ((int64_t)TARGET_MICROSECONDS_PER_FRAME - ((gPerformanceData.CurrentTimerResolution * 0.1f)) * 5))
             {
-                Sleep(0);   // anywhere from 1 millisecond to a full system timer tick (?)
+                Sleep(1);   // anywhere from 1 millisecond to a full system timer tick (?)
             }
         }
 
@@ -156,6 +159,27 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
 
         if ((gPerformanceData.TotalFramesRendered % AVG_FPS_X_FRAME) == 0)
         {
+            GetSystemTimeAsFileTime(&gPerformanceData.CurrentSystemTime);
+
+            GetProcessTimes(GetCurrentProcess(), 
+                &gPerformanceData.ProcessCreationTime, 
+                &gPerformanceData.ProcessExitTime,
+                (FILETIME*)&gPerformanceData.CurrentKernelCPUTime,
+                (FILETIME*)&gPerformanceData.CurrentUserCPUTime);
+
+            gPerformanceData.CPUPercent = (gPerformanceData.CurrentKernelCPUTime - gPerformanceData.PreviousKernelCPUTime) + \
+                (gPerformanceData.CurrentUserCPUTime - gPerformanceData.PreviousUserCPUTime);
+
+            gPerformanceData.CPUPercent /= (gPerformanceData.CurrentSystemTime - gPerformanceData.PreviousSystemTime);
+
+            gPerformanceData.CPUPercent /= gPerformanceData.SystemInfo.dwNumberOfProcessors;
+
+            gPerformanceData.CPUPercent *= 100;
+
+            GetProcessHandleCount(GetCurrentProcess(), &gPerformanceData.HandleCount);
+
+            GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&gPerformanceData.MemInfo, sizeof(gPerformanceData.MemInfo));
+
             gPerformanceData.RawFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorRaw / AVG_FPS_X_FRAME) * .000001f);
 
             gPerformanceData.CookedFPSAverage = 1.0f / ((ElapsedMicroSecondsPerFrameAccumulatorCooked / AVG_FPS_X_FRAME) * .000001f);
@@ -163,6 +187,12 @@ INT __stdcall WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance, PSTR Comma
             ElapsedMicroSecondsPerFrameAccumulatorRaw = 0;
 
             ElapsedMicroSecondsPerFrameAccumulatorCooked = 0;
+
+            gPerformanceData.PreviousKernelCPUTime = gPerformanceData.CurrentKernelCPUTime;
+
+            gPerformanceData.PreviousUserCPUTime = gPerformanceData.CurrentUserCPUTime;
+
+            gPerformanceData.PreviousSystemTime = gPerformanceData.CurrentSystemTime;
 
         }
     }
@@ -455,27 +485,39 @@ void RenderFrameGraphics(void)
 
         // Show FPS info
 
-        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "FPS Raw:     %.01f", gPerformanceData.RawFPSAverage);
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "FPS Raw:     %.01f", gPerformanceData.RawFPSAverage);
 
         TextOutA(DeviceContext, 0, 0, DebugTextBuffer, (int)strlen(DebugTextBuffer));
 
-        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "FPS Cooked:  %.01f", gPerformanceData.CookedFPSAverage);
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "FPS Cooked:  %.01f", gPerformanceData.CookedFPSAverage);
 
         TextOutA(DeviceContext, 0, 13, DebugTextBuffer, (int)strlen(DebugTextBuffer));
 
         // Show Resolution info
 
-        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "Min Timer Resolution:  %.02f", gPerformanceData.MinimumTimerResolution / 10000.0f);
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "Min Timer Resolution:  %.02f", gPerformanceData.MinimumTimerResolution / 10000.0f);
 
         TextOutA(DeviceContext, 0, 26, DebugTextBuffer, (int)strlen(DebugTextBuffer));
         
-        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "Max Timer Resolution:  %.01f", gPerformanceData.MaximumTimerResolution / 10000.0f);
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "Max Timer Resolution:  %.01f", gPerformanceData.MaximumTimerResolution / 10000.0f);
 
         TextOutA(DeviceContext, 0, 39, DebugTextBuffer, (int)strlen(DebugTextBuffer));
 
-        sprintf_s(DebugTextBuffer, _countof(DebugTextBuffer), "Cur Timer Resolution:  %.01f", gPerformanceData.CurrentTimerResolution / 10000.0f);
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "Cur Timer Resolution:  %.01f", gPerformanceData.CurrentTimerResolution / 10000.0f);
 
         TextOutA(DeviceContext, 0, 51, DebugTextBuffer, (int)strlen(DebugTextBuffer));
+
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "Handles:  %llu", gPerformanceData.HandleCount);
+
+        TextOutA(DeviceContext, 0, 63, DebugTextBuffer, (int)strlen(DebugTextBuffer));
+
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "Memory:  %lu KB", gPerformanceData.MemInfo.PrivateUsage / 1024);
+
+        TextOutA(DeviceContext, 0, 76, DebugTextBuffer, (int)strlen(DebugTextBuffer));
+
+        sprintf_s(DebugTextBuffer, sizeof(DebugTextBuffer), "CPU:  %.02f %%", gPerformanceData.CPUPercent);
+
+        TextOutA(DeviceContext, 0, 89, DebugTextBuffer, (int)strlen(DebugTextBuffer));
     }
 
     ReleaseDC(gGameWindow, DeviceContext);

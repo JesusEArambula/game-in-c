@@ -10,9 +10,9 @@
 
 #define GAME_CANVAS						(GAME_WIDTH * GAME_HEIGHT * (GAME_BPP / 8))
 
-#define AVG_FPS_X_FRAME					100	// after ever X frames, calculate the average FPS
+#define AVG_FPS_X_FRAME					120	// after ever X frames, calculate the average FPS
 
-#define TARGET_MICROSECONDS_PER_FRAME	16667
+#define TARGET_MICROSECONDS_PER_FRAME	8333 // 8333	// was 16667
 
 #define SIMD
 
@@ -62,11 +62,36 @@ typedef struct GAME_PERFORMANCE_DATA
 
 	BOOL DisplayDebugInfo;
 
-	LONG MinimumTimerResolution;
+	ULONG MinimumTimerResolution;
 
-	LONG MaximumTimerResolution;
+	ULONG MaximumTimerResolution;
 
-	LONG CurrentTimerResolution;
+	ULONG CurrentTimerResolution;
+
+	DWORD HandleCount;
+
+	PROCESS_MEMORY_COUNTERS_EX MemInfo;
+
+	SYSTEM_INFO SystemInfo;
+
+	int64_t CurrentSystemTime;
+
+	int64_t PreviousSystemTime;
+
+	FILETIME ProcessCreationTime;
+
+	FILETIME ProcessExitTime;
+
+	int64_t CurrentUserCPUTime;
+
+	int64_t CurrentKernelCPUTime;
+
+	int64_t PreviousUserCPUTime;
+
+	int64_t PreviousKernelCPUTime;
+
+	double CPUPercent;
+
 
 } GAME_PERFORMANCE_DATA;
 
