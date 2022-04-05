@@ -12,7 +12,7 @@
 
 #define AVG_FPS_X_FRAME					120	// after ever X frames, calculate the average FPS
 
-#define TARGET_MICROSECONDS_PER_FRAME	8333 // 8333	// was 16667
+#define TARGET_MICROSECONDS_PER_FRAME	16667ULL // Unsigned Long Long (64 bit)
 
 #define SIMD
 
@@ -78,18 +78,6 @@ typedef struct GAME_PERFORMANCE_DATA
 
 	int64_t PreviousSystemTime;
 
-	FILETIME ProcessCreationTime;
-
-	FILETIME ProcessExitTime;
-
-	int64_t CurrentUserCPUTime;
-
-	int64_t CurrentKernelCPUTime;
-
-	int64_t PreviousUserCPUTime;
-
-	int64_t PreviousKernelCPUTime;
-
 	double CPUPercent;
 
 
@@ -99,9 +87,9 @@ typedef struct PLAYER
 {
 	char Name[12];
 
-	int32_t WorldPosX;
+	int32_t ScreenPosX;
 
-	int32_t WorldPosY;
+	int32_t ScreenPosY;
 
 	int32_t HP;
 
